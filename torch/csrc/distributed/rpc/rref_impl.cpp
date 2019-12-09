@@ -1,4 +1,4 @@
-#include <torch/csrc/distributed/rpc/rref.h>
+#include <torch/csrc/distributed/rpc/rref_impl.h>
 
 #include <torch/csrc/distributed/autograd/rpc_messages/rpc_with_autograd.h>
 #include <torch/csrc/distributed/autograd/utils.h>
@@ -84,12 +84,12 @@ RRefForkData RRefForkData::fromPyTuple(const py::tuple& t) {
   return RRefForkData(ownerId, rrefId, forkId, parent);
 }
 
-//////////////////////////////  RRef  /////////////////////////////////////
+//////////////////////////////  RRefBase  /////////////////////////////////////
 
-RRef::RRef(worker_id_t ownerId, const RRefId& rrefId, const TypePtr& type)
+RRefBase::RRefBase(worker_id_t ownerId, const RRefId& rrefId, const TypePtr& type)
     : ownerId_(ownerId), rrefId_(rrefId), type_(type) {}
 
-RRefForkData RRef::fork() const {
+RRefForkData RRefBase::fork() const {
   auto& ctx = RRefContext::getInstance();
   return RRefForkData(
       ownerId_, rrefId_, ctx.genGloballyUniqueId(), ctx.getWorkerId());
@@ -102,7 +102,7 @@ UserRRef::UserRRef(
     const RRefId& rrefId,
     const ForkId& forkId,
     const TypePtr& type)
-    : RRef(ownerId, rrefId, type), forkId_(forkId) {
+    : RRefBase(ownerId, rrefId, type), forkId_(forkId) {
   // Do nothing,
   // (1) If this UserRRef is a fork of an existing RRef, RRefContext will send
   //     a RREF_FORK_REQUEST message to the owner.
