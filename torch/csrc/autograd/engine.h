@@ -190,10 +190,14 @@ struct TORCH_API Engine {
   void queue_callback(std::function<void()> callback);
 
   bool is_checkpoint_valid();
-
   size_t ready_queue_size(at::Device device);
 
- protected:
+  // [Experimental] Configure number of threads on each device to
+  // concurrently run autograd backward
+  void set_num_threads_per_device(int num_threads_per_device);
+  int get_num_threads_per_device();
+
+protected:
   void compute_dependencies(Node* root, GraphTask& task);
   void evaluate_function(
       std::shared_ptr<GraphTask>& graph_task,
@@ -246,6 +250,10 @@ struct TORCH_API Engine {
  // when Engine shuts down, so there may be threads waiting on work_
  // for the graphtasks_queue_ to be nonempty.
  std::shared_ptr<ThreadPoolShared> thread_pool_shared_;
+
+ private:
+  std::atomic_bool threads_initialized_;
+  std::atomic<uint64_t> num_threads_per_device_;
 };
 
 // allow python_engine to override the default engine when it loads
