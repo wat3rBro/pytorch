@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+import inspect
 from typing import List, Dict
 from textwrap import dedent
 from collections import OrderedDict
@@ -851,6 +852,25 @@ class TestDict(JitTestCase):
 
     def dict2(self):
         return {'x': torch.ones(1) + 100, 'y': torch.ones(1) + 101, 'z': torch.ones(1) + 102}
+
+    def test_del(self):
+        def inputs():
+            return {'hi': 2, 'bye': 3}
+
+        def fn(x):
+            # type: (Dict[str, int]) -> Dict[str, int]
+            del x['hi']
+            return x
+
+        python_out = fn(inputs())
+        # checkScript reuses the same object, but here it's being mutated so do
+        # it manually
+        cu = torch.jit.CompilationUnit()
+        cu.define(dedent(inspect.getsource(fn)))
+        self.assertEqual(cu.fn(inputs()), python_out)
+        self.assertEqual(torch.jit.script(fn)(inputs()), python_out)
+        with self.assertRaisesRegex(RuntimeError, "KeyError"):
+            self.checkScript(fn, [{}])
 
     def test_keys(self):
         @torch.jit.script

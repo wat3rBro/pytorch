@@ -2231,6 +2231,19 @@ int dictSetDefault(Stack& stack) {
   return 0;
 }
 
+int dictDelete(Stack& stack) {
+  auto key = pop(stack);
+  auto dict = pop(stack).toGenericDict();
+  auto value = dict.find(key);
+  if (value == dict.end()) {
+    AT_ERROR("KeyError: ", key);
+  } else {
+    auto num_removed = dict.erase(key);
+    AT_ASSERT(num_removed != 0);
+  }
+  return 0;
+}
+
 template<bool has_default>
 int dictPop(Stack& stack) {
   IValue default_value;
@@ -3104,6 +3117,11 @@ RegisterOperators reg2({
           "aten::setdefault(Dict(" key_type ", t)(a!) self, " key_type        \
           " key, t default_value) -> t(*)",                                   \
           dictSetDefault,                                                     \
+          aliasAnalysisFromSchema()),                                         \
+      Operator(                                                               \
+          "aten::Delete(Dict(" key_type ", t)(a!) self, " key_type            \
+          " key) -> ()",                                                    \
+          dictDelete,                                                         \
           aliasAnalysisFromSchema()),                                         \
       Operator(                                                               \
           "aten::pop(Dict(" key_type ", t)(a!) self, " key_type               \
