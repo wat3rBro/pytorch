@@ -609,7 +609,7 @@ struct slot_dict_impl {
   }
 
   void setattr(const std::string& name, py::object value) {
-    const TypePtr& type = module_->type()->getAttribute(name);
+    const TypePtr& type = module_->type()->findAttribute(name);
     script::Module(module_).setattr(name, toIValue(std::move(value), type));
   }
 
@@ -693,7 +693,6 @@ void initJitScriptBindings(PyObject* module) {
           "setattr",
           [](Object& self, const std::string& name, py::object value) {
             TypePtr type = self.type()->getAttribute(name);
-            TORCH_CHECK(type, "Module has no attribute '", name, "'");
             auto ivalue = toIValue(std::move(value), type);
             self.setattr(name, ivalue);
           })
