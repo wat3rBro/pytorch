@@ -389,3 +389,19 @@ if (NOT TORCH_PYTHON_LINK_FLAGS STREQUAL "")
 endif()
 
 install(TARGETS torch_python DESTINATION "${TORCH_INSTALL_LIB_DIR}")
+
+# Note [Global dependencies]
+# Some libraries (e.g. OpenMPI) like to dlopen plugins after they're initialized,
+# and they assume that all of their symbols will be available in the global namespace.
+# On the other hand we try to be good citizens and avoid polluting the symbol
+# namespaces, so libtorch is loaded with all its dependencies in a local scope.
+# That usually leads to missing symbol errors at run-time, so to avoid a situation like
+# this we have to preload those libs in a global namespace.
+add_library(torch_global_deps SHARED ${TORCH_SRC_DIR}/csrc/empty.c)
+set_target_properties(torch_global_deps PROPERTIES LINKER_LANGUAGE C)
+if (USE_MPI)
+    target_link_libraries(torch_global_deps ${MPI_CXX_LIBRARIES})
+endif ()
+target_link_libraries(torch_global_deps ${MKL_LIBRARIES})
+
+install(TARGETS torch_global_deps DESTINATION "${TORCH_INSTALL_LIB_DIR}")
