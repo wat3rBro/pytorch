@@ -9,6 +9,8 @@
 #include <sstream>
 #include <thread>
 
+#include <ATen/cuda/CUDAContext.h>
+
 #include <c10d/FileStore.hpp>
 #include <c10d/ProcessGroupGloo.hpp>
 #include <c10d/test/TestUtils.hpp>
@@ -368,6 +370,10 @@ void testRecv(const std::string& path) {
 }
 
 int main(int argc, char** argv) {
+  if (!at::cuda::is_available()) {
+    LOG(INFO) << "Skipping test since CUDA is not available.";
+    return EXIT_SUCCESS;
+  }
   {
     TemporaryFile file;
     auto work = testSignal(file.path, SIGSTOP);
