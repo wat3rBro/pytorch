@@ -26,11 +26,32 @@ std::vector<int64_t> ProcessGroupAgent::MessageCounter::snapshot() {
   return counters_;
 }
 
+//////////////////////////  MetricsTracker  /////////////////////////////////
+
+ProcessGroupAgent::AverageMetricsTracker::AverageMetricsTracker(
+    const std::string key,
+    double currentSum,
+    uint64_t currentCount)
+    : key_(key), currentSum_(currentSum), currentCount_(currentCount) {}
+
+void ProcessGroupAgent::AverageMetricsTracker::addData(uint64_t dataPoint) {
+  currentSum_ += dataPoint;
+  ++currentCount_;
+}
+
+double ProcessGroupAgent::AverageMetricsTracker::computeAverage() {
+  return currentSum_ / (double)currentCount_;
+}
+
 ////////////////////////  ProcessGroupAgent  /////////////////////////////////
 
 const ProcessGroupAgent::steady_clock_time_point
     ProcessGroupAgent::kInfiniteTimeoutTimePoint =
         std::chrono::time_point<std::chrono::steady_clock>::max();
+const std::string kNumPendingRequests = "num_pending_requests";
+const std::string kThreadPoolSize = "thread_pool_size";
+const std::string kNumIdleThreads = "num_idle_threads";
+const std::string kGilAverageWaitTime = "gil_average_wait_time_us";
 
 void ProcessGroupAgent::collectNames() {
   const std::string& workerName = workerInfo_.name_;
@@ -565,17 +586,32 @@ std::unordered_map<std::string, std::string> ProcessGroupAgent::getMetrics() {
   std::unordered_map<std::string, std::string> metrics;
   {
     std::unique_lock<std::mutex> lock(futureMutex_);
-    metrics["num_pending_requests"] = c10::to_string(futures_.size());
+    metrics[kNumPendingRequests] = c10::to_string(futures_.size());
   }
-  metrics["thread_pool_size"] = c10::to_string(threadPool_.size());
-  metrics["num_idle_threads"] = c10::to_string(threadPool_.numAvailable());
+  metrics[kThreadPoolSize] = c10::to_string(threadPool_.size());
+  metrics[kNumIdleThreads] = c10::to_string(threadPool_.numAvailable());
+  for (const auto& metricInfo : metricsMap_) {
+    metrics[metricInfo.first] =
+        c10::to_string(metricInfo.second->computeAverage());
+  }
   return metrics;
 }
 
-std::unordered_map<std::string, std::string> ProcessGroupAgent::getDebugInfo() {
-  /* This would later include more info other than metrics for eg: may include
-     stack traces for the threads owned by the agent */
-  return getMetrics();
+void ProcessGroupAgent::addGilWaitTime(
+    const std::chrono::microseconds gilWaitTime) {
+  auto gilMetrics = metricsMap_.find(kGilAverageWaitTime);
+  if (gilMetrics == metricsMap_.end()) {
+    gilMetrics = metricsMap_
+                     .emplace(
+                         std::piecewise_construct,
+                         std::forward_as_tuple(kGilAverageWaitTime),
+                         std::forward_as_tuple(std::move(
+                             c10::guts::make_unique<AverageMetricsTracker>(
+                                 kGilAverageWaitTime))))
+                     .first;
+  }
+  auto& metricsPtr = gilMetrics->second;
+  metricsPtr->addData(gilWaitTime.count());
 }
 
 } // namespace rpc
